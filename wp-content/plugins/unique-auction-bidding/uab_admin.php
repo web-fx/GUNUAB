@@ -33,6 +33,19 @@ function unique_auction_activate() {
     } else {
         error_log('admin-core.php not found at ' . $admin_core_path . ' - Directory structure: ' . print_r(scandir(__DIR__), true));
     }
+
+    // Include the admin module for WooCommerce settings
+    $admin_module_path = __DIR__ . '/Administration_Mod/Control_Mod/admin-module.php';
+    if (file_exists($admin_module_path)) {
+        if (is_readable($admin_module_path)) {
+            require_once $admin_module_path;
+            error_log('admin-module.php loaded successfully from ' . $admin_module_path);
+        } else {
+            error_log('admin-module.php at ' . $admin_module_path . ' is not readable - Permissions: ' . substr(sprintf('%o', fileperms($admin_module_path)), -4));
+        }
+    } else {
+        error_log('admin-module.php not found at ' . $admin_module_path . ' - Directory structure: ' . print_r(scandir(__DIR__ . '/Administration_Mod/Control_Mod/'), true));
+    }
 }
 
 function unique_auction_activation_check() {
