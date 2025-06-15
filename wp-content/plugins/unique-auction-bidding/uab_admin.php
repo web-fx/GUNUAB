@@ -34,13 +34,17 @@ function unique_auction_activate() {
         error_log('admin-core.php not found at ' . $admin_core_path . ' - Directory structure: ' . print_r(scandir(plugin_dir_path(__FILE__) . 'Administration_Mod/'), true));
     }
 
-    // Include the admin module for WooCommerce settings with explicit path
+    // Include the admin module for WooCommerce settings with explicit path and error handling
     $admin_module_path = plugin_dir_path(__FILE__) . 'Administration_Mod/Control_Mod/admin-module.php';
     error_log('Attempting to load admin-module.php from: ' . $admin_module_path);
     if (file_exists($admin_module_path)) {
         if (is_readable($admin_module_path)) {
             require_once $admin_module_path;
-            error_log('admin-module.php loaded successfully from ' . $admin_module_path);
+            if (class_exists('UAB_Admin_Module')) {
+                error_log('UAB_Admin_Module class loaded successfully from ' . $admin_module_path);
+            } else {
+                error_log('UAB_Admin_Module class not found in ' . $admin_module_path . ' - File contents: ' . file_get_contents($admin_module_path));
+            }
         } else {
             error_log('admin-module.php at ' . $admin_module_path . ' is not readable - Permissions: ' . substr(sprintf('%o', fileperms($admin_module_path)), -4));
         }
@@ -95,6 +99,6 @@ function uab_render_generate_page() {
 
 // Add debug log for WooCommerce settings tab filter
 add_filter('woocommerce_settings_tabs_array', function ($tabs) {
-    error_log('woocommerce_settings_tabs_array filter triggered in ' . __FILE__);
+    error_log('woocommerce_settings_tabs_array filter triggered in ' . __FILE__ . ' with tabs: ' . print_r($tabs, true));
     return $tabs;
 }, 50);
