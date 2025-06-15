@@ -1,0 +1,26 @@
+Registration Form (form-login.php):
+Location: /home/onelook/public_html/gunbid/wp-content/themes/hello-child/woocommerce/myaccount/form-login.php
+Status: Fully functional with a two-column "Email Address" and "Password" layout, horizontal "Membership Type" radio buttons (Bidder, Advertiser, Advertiser & Bidder), and a dynamically toggled "Award Code" section for "Bidder" or "Advertiser & Bidder" when testMode = true or uab_promotion_active is true. The "Award Code" input is now editable, and the section includes "Joining Award: Available" text.
+Issues: The "Award deposit" (wallet_balance) isn’t appearing in user meta (e.g., for user_id = 45), suggesting a processing issue (e.g., user_register hook not firing correctly or validation failing).
+Next Steps: Debug the deposit logic, build the admin toggle for uab_promotion_active, and add the informational field admin control.
+User Management (user-management.php):
+Location: /home/onelook/public_html/gunbid/wp-content/plugins/unique-auction-bidding/Administration_Mod/users/user-management.php
+Status: Initializes hooks, validates user_type and registration_code, and attempts to set wallet_balance to $5.00 on successful registration with "VALIDCODE123" for "Bidder" or "Both" when the promotion is active. Debug logs confirm initialization but no deposit logs.
+Issues: The user_register action may not be triggering the deposit due to missing POST data or promotion state.
+Next Steps: Verify hook execution and adjust logic if needed.
+Theme Functions (functions.php):
+Location: /home/onelook/public_html/gunbid/wp-content/themes/hello-child/functions.php
+Status: Trimmed to include style enqueuing, nonce lifetime increase, product edit capabilities, and Stripe debug script. Removed legacy UAB plugin features.
+Issues: No current issues, but stripe-debug.js needs verification.
+Next Steps: Ensure compatibility with Stripe integration.
+Payment Gateway (payment-gateway.php):
+Location: /home/onelook/public_html/gunbid/wp-content/plugins/unique-auction-bidding/Financial_Mod/payment-gateway.php
+Status: Skeleton code enqueues Stripe JS and prepares for user_register payment processing, but not fully implemented.
+Issues: Not yet active for deposits.
+Next Steps: Complete Stripe integration for registration and dashboard deposits.
+Dashboard:
+Status: Not yet implemented. Planned for "Credit Card" and "Deposit" fields.
+Next Steps: Develop a custom endpoint or override my-account.php.
+Admin Area:
+Status: Not built. Planned to toggle uab_promotion_active and set deposit amounts/info text.
+Next Steps: Create settings page in Administration_Mod.
