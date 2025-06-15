@@ -39,6 +39,18 @@ class UAB_Admin_Module {
                 'desc' => __('Configure settings for the Unique Auction Bidding plugin. Add new options as modules are developed.', 'unique-auction-bidding'),
                 'id'   => 'uab_settings_section'
             ),
+            'user_types' => array(
+                'name' => __('Enable User Types', 'unique-auction-bidding'),
+                'type' => 'multicheck',
+                'desc' => __('Select the user types to enable for the auction system.', 'unique-auction-bidding'),
+                'id'   => 'uab_user_types',
+                'options' => array(
+                    'advertiser' => __('Advertiser', 'unique-auction-bidding'),
+                    'bidder' => __('Bidder', 'unique-auction-bidding'),
+                    'bidvertiser' => __('Bidvertiser', 'unique-auction-bidding')
+                ),
+                'default' => array('advertiser', 'bidder')
+            ),
             'section_end' => array(
                 'type' => 'sectionend',
                 'id'   => 'uab_settings_section_end'
