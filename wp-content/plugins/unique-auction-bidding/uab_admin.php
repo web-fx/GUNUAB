@@ -34,8 +34,9 @@ function unique_auction_activate() {
         error_log('admin-core.php not found at ' . $admin_core_path . ' - Directory structure: ' . print_r(scandir(__DIR__), true));
     }
 
-    // Include the admin module for WooCommerce settings
-    $admin_module_path = __DIR__ . '/Administration_Mod/Control_Mod/admin-module.php';
+    // Include the admin module for WooCommerce settings with explicit path
+    $admin_module_path = plugin_dir_path(__FILE__) . 'Administration_Mod/Control_Mod/admin-module.php';
+    error_log('Attempting to load admin-module.php from: ' . $admin_module_path);
     if (file_exists($admin_module_path)) {
         if (is_readable($admin_module_path)) {
             require_once $admin_module_path;
@@ -44,7 +45,7 @@ function unique_auction_activate() {
             error_log('admin-module.php at ' . $admin_module_path . ' is not readable - Permissions: ' . substr(sprintf('%o', fileperms($admin_module_path)), -4));
         }
     } else {
-        error_log('admin-module.php not found at ' . $admin_module_path . ' - Directory structure: ' . print_r(scandir(__DIR__ . '/Administration_Mod/Control_Mod/'), true));
+        error_log('admin-module.php not found at ' . $admin_module_path . ' - Directory structure: ' . print_r(scandir(plugin_dir_path(__FILE__) . 'Administration_Mod/Control_Mod/'), true));
     }
 }
 
@@ -61,3 +62,33 @@ function unique_auction_admin_init() {
     // Placeholder for admin setup
 }
 add_action('admin_init', 'unique_auction_admin_init');
+
+// Add admin action to generate structure files
+add_action('admin_action_generate_structure', 'uab_generate_structure');
+add_action('admin_action_generate_structure_with_contents', 'uab_generate_structure_with_contents');
+
+function uab_generate_structure() {
+    require_once plugin_dir_path(__FILE__) . 'Administration_Mod/Control_Mod/scripts/generate_structure.php';
+    die(); // Exit after generation
+}
+
+function uab_generate_structure_with_contents() {
+    require_once plugin_dir_path(__FILE__) . 'Administration_Mod/Control_Mod/scripts/generate_structure_with_contents.php';
+    die(); // Exit after generation
+}
+
+// Add admin menu item for generation (optional, for manual triggering)
+function uab_add_admin_menu() {
+    add_management_page('Generate UAB Structure', 'Generate UAB Structure', 'manage_options', 'uab-generate-structure', 'uab_render_generate_page');
+}
+add_action('admin_menu', 'uab_add_admin_menu');
+
+function uab_render_generate_page() {
+    if (!current_user_can('manage_options')) {
+        wp_die(__('You do not have sufficient permissions to access this page.'));
+    }
+    echo '<div class="wrap"><h1>Generate UAB Structure</h1>';
+    echo '<a href="' . wp_nonce_url(admin_url('admin-action.php?action=generate_structure'), 'generate_structure') . '" class="button">Generate Structure</a> ';
+    echo '<a href="' . wp_nonce_url(admin_url('admin-action.php?action=generate_structure_with_contents'), 'generate_structure_with_contents') . '" class="button">Generate Structure with Contents</a>';
+    echo '</div>';
+}
