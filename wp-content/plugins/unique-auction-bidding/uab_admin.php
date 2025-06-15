@@ -92,3 +92,9 @@ function uab_render_generate_page() {
     echo '<a href="' . wp_nonce_url(admin_url('admin.php?action=generate_structure_with_contents'), 'generate_structure_with_contents') . '" class="button">Generate Structure with Contents</a>';
     echo '</div>';
 }
+
+// Add debug log for WooCommerce settings tab filter
+add_filter('woocommerce_settings_tabs_array', function ($tabs) {
+    error_log('woocommerce_settings_tabs_array filter triggered in ' . __FILE__);
+    return $tabs;
+}, 50);

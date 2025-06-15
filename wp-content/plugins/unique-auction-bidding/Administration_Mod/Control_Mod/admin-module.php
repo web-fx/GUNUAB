@@ -19,15 +19,18 @@ class UAB_Admin_Module {
     }
 
     public function add_uab_settings_tab($tabs) {
+        error_log('add_uab_settings_tab called in ' . __FILE__);
         $tabs[UAB_WC_TAB_ID] = __('UAB Settings', 'unique-auction-bidding');
         return $tabs;
     }
 
     public function render_uab_settings_tab() {
+        error_log('render_uab_settings_tab called in ' . __FILE__);
         woocommerce_admin_fields($this->get_uab_settings());
     }
 
     public function save_uab_settings() {
+        error_log('save_uab_settings called in ' . __FILE__);
         woocommerce_update_options($this->get_uab_settings());
     }
 
