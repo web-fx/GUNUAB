@@ -20,10 +20,13 @@ function generate_directory_tree($dir, $prefix = '') {
 
 $plugin_dir = ABSPATH . 'wp-content/plugins/unique-auction-bidding';
 $theme_dir = ABSPATH . 'wp-content/themes/hello-child';
-$output_file = plugin_dir_path(__FILE__) . '../../structure.txt';
+$output_file = WP_CONTENT_DIR . '/uploads/wc-logs/structure.txt';
 
 $tree = "Plugin Directory Tree:\n" . generate_directory_tree($plugin_dir) . "\n";
 $tree .= "Theme Directory Tree:\n" . generate_directory_tree($theme_dir);
 
-file_put_contents($output_file, $tree);
-echo "Directory tree saved to $output_file";
+if (file_put_contents($output_file, $tree) === false) {
+    wp_die('Failed to write structure.txt. Check permissions for ' . $output_file);
+} else {
+    wp_die('Structure generated. Check ' . $output_file);
+}
