@@ -186,6 +186,13 @@ function uab_financial_page() {
         'nonce' => wp_create_nonce('uab_stripe_test'),
         'mode' => $mode
     ));
+
+    // Verify script loading
+    if (wp_script_is('uab-stripe-test', 'enqueued')) {
+        error_log('uab-stripe-test script enqueued successfully');
+    } else {
+        error_log('uab-stripe-test script failed to enqueue');
+    }
 }
 
 // Add AJAX handlers for testing
@@ -348,6 +355,9 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
                         cvc: cvc,
                         name: name
                     },
+                    beforeSend: function() {
+                        console.log('AJAX Request Starting'); // Debug
+                    },
                     success: function(response) {
                         console.log('AJAX Success: ' + JSON.stringify(response)); // Debug
                         if (response.success) {
@@ -386,6 +396,9 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
                     nonce: uab_stripe_test.nonce,
                     mode: mode,
                     deposit_amount: deposit_amount
+                },
+                beforeSend: function() {
+                    console.log('AJAX Request Starting'); // Debug
                 },
                 success: function(response) {
                     console.log('AJAX Success: ' + JSON.stringify(response)); // Debug
