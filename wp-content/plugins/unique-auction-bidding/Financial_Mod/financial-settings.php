@@ -217,6 +217,12 @@ function uab_stripe_save_card() {
         return;
     }
 
+    // Validate card data
+    if (!preg_match('/^\d{16}$/', $card_number) || !preg_match('/^\d{2}\/\d{2}$/', $expiry) || !preg_match('/^\d{3,4}$/', $cvc) || empty($name)) {
+        wp_send_json_error('Invalid card details. Ensure correct format (e.g., 4242424242424242, 12/25, 123).');
+        return;
+    }
+
     // Create a Stripe token
     try {
         $token = Token::create(array(
@@ -355,8 +361,9 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
                         cvc: cvc,
                         name: name
                     },
-                    beforeSend: function() {
-                        console.log('AJAX Request Starting'); // Debug
+                    beforeSend: function(xhr) {
+                        console.log('AJAX Request Starting with Nonce: ' + uab_stripe_test.nonce); // Debug
+                        xhr.setRequestHeader('X-WP-Nonce', uab_stripe_test.nonce); // Explicitly set nonce
                     },
                     success: function(response) {
                         console.log('AJAX Success: ' + JSON.stringify(response)); // Debug
@@ -397,8 +404,9 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
                     mode: mode,
                     deposit_amount: deposit_amount
                 },
-                beforeSend: function() {
-                    console.log('AJAX Request Starting'); // Debug
+                beforeSend: function(xhr) {
+                    console.log('AJAX Request Starting with Nonce: ' + uab_stripe_test.nonce); // Debug
+                    xhr.setRequestHeader('X-WP-Nonce', uab_stripe_test.nonce); // Explicitly set nonce
                 },
                 success: function(response) {
                     console.log('AJAX Success: ' + JSON.stringify(response)); // Debug
