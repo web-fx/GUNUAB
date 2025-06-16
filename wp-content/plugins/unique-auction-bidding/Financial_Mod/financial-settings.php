@@ -29,8 +29,8 @@ function uab_sanitize_stripe_options($input) {
     $output = array();
     foreach ($input as $key => $value) {
         if (in_array($key, ['uab_stripe_test_secret_key', 'uab_stripe_live_secret_key', 'uab_stripe_test_webhook_signing_secret', 'uab_stripe_live_webhook_signing_secret'])) {
-            // Hash sensitive fields
-            $output[$key] = !empty($value) ? wp_hash_password($value) : (get_option('uab_stripe_options')[$key] ?? '');
+            // Store plain text for Stripe API
+            $output[$key] = !empty($value) ? sanitize_text_field($value) : (get_option('uab_stripe_options')[$key] ?? '');
         } elseif ($key === 'uab_stripe_wallet_deposit') {
             $output[$key] = is_numeric($value) && $value > 0 ? floatval($value) : (get_option('uab_stripe_options')[$key] ?? 0);
         } else {
@@ -73,7 +73,7 @@ function uab_stripe_field_callback($args) {
             echo '<div class="' . $class . '">';
             if ($id === 'uab_stripe_test_secret_key' || $id === 'uab_stripe_test_webhook_signing_secret') {
                 echo '<input type="password" name="uab_stripe_options[' . $id . ']" id="' . $id . '" value="" class="regular-text" autocomplete="new-password" />';
-                echo '<p class="description">Enter your Stripe ' . str_replace('uab_stripe_', '', $id) . ' (will be encrypted, leave blank to keep existing).</p>';
+                echo '<p class="description">Enter your Stripe ' . str_replace('uab_stripe_', '', $id) . ' (will be stored as plain text for testing, leave blank to keep existing).</p>';
             } else {
                 echo '<input type="text" name="uab_stripe_options[' . $id . ']" id="' . $id . '" value="' . esc_attr($value) . '" class="regular-text" />';
                 echo '<p class="description">Enter your Stripe ' . str_replace('uab_stripe_', '', $id) . ' (keep secure).</p>';
@@ -87,7 +87,7 @@ function uab_stripe_field_callback($args) {
             echo '<div class="' . $class . '">';
             if ($id === 'uab_stripe_live_secret_key' || $id === 'uab_stripe_live_webhook_signing_secret') {
                 echo '<input type="password" name="uab_stripe_options[' . $id . ']" id="' . $id . '" value="" class="regular-text" autocomplete="new-password" />';
-                echo '<p class="description">Enter your Stripe ' . str_replace('uab_stripe_', '', $id) . ' (will be encrypted, leave blank to keep existing).</p>';
+                echo '<p class="description">Enter your Stripe ' . str_replace('uab_stripe_', '', $id) . ' (will be stored as plain text for testing, leave blank to keep existing).</p>';
             } else {
                 echo '<input type="text" name="uab_stripe_options[' . $id . ']" id="' . $id . '" value="' . esc_attr($value) . '" class="regular-text" />';
                 echo '<p class="description">Enter your Stripe ' . str_replace('uab_stripe_', '', $id) . ' (keep secure).</p>';
@@ -170,10 +170,7 @@ function uab_financial_page() {
     $mode = isset($options['uab_stripe_mode']) ? $options['uab_stripe_mode'] : 'test';
     $secret_key = ($mode === 'test') ? $options['uab_stripe_test_secret_key'] : $options['uab_stripe_live_secret_key'];
     if (!empty($secret_key)) {
-        // Note: wp_hash_password() stores a hash, so we need the original key for Stripe
-        // For testing, assume the user entered the key and it’s hashed; this is a simplification
-        // In production, store the plain key securely or implement key retrieval
-        Stripe::setApiKey($secret_key); // This will fail with hashed keys; see notes below
+        Stripe::setApiKey($secret_key); // Use plain text secret key
     }
     echo '<div class="wrap"><h1>Financial</h1>';
     echo '<form method="post" action="options.php">';
@@ -184,7 +181,7 @@ function uab_financial_page() {
 
     // Enqueue JavaScript for card saving and deposit
     wp_enqueue_script('uab-stripe-test', plugin_dir_url(__FILE__) . '../Administration_Mod/Control_Mod/scripts/stripe-test.js', array('jquery'), '1.0', true);
-    wp_localize_script('uab-stripe-test', 'uab_stripe_test', array(
+    wp_localize_script('uab_stripe_test', 'uab_stripe_test', array(
         'ajax_url' => admin_url('admin-ajax.php'),
         'nonce' => wp_create_nonce('uab_stripe_test'),
         'mode' => $mode
@@ -200,12 +197,18 @@ function uab_stripe_save_card() {
     $options = get_option('uab_stripe_options', array());
     $mode = $_POST['mode'];
     $secret_key = ($mode === 'test') ? $options['uab_stripe_test_secret_key'] : $options['uab_stripe_live_secret_key'];
-    Stripe::setApiKey($secret_key); // Use saved secret key (hashed, see notes)
+    Stripe::setApiKey($secret_key); // Use plain text secret key
 
     $card_number = sanitize_text_field($_POST['card_number']);
     $expiry = sanitize_text_field($_POST['expiry']);
     $cvc = sanitize_text_field($_POST['cvc']);
     $name = sanitize_text_field($_POST['name']);
+
+    error_log('Save Card Attempt - Mode: ' . $mode . ', Secret Key: ' . $secret_key . ', Card Data: ' . $card_number . ', ' . $expiry . ', ' . $cvc . ', ' . $name); // Debug
+    if (empty($secret_key)) {
+        wp_send_json_error('No secret key configured for ' . $mode . ' mode.');
+        return;
+    }
 
     // Create a Stripe token
     try {
@@ -218,6 +221,7 @@ function uab_stripe_save_card() {
                 'name' => $name
             )
         ));
+        error_log('Stripe Token Created: ' . $token->id); // Debug log
         if ($token->id) {
             $options['uab_stripe_saved_card'] = array(
                 'token' => $token->id,
@@ -230,8 +234,10 @@ function uab_stripe_save_card() {
             wp_send_json_success('Card tokenized and saved successfully with Stripe.');
         }
     } catch (\Stripe\Exception\CardException $e) {
+        error_log('Stripe Card Error: ' . $e->getError()->message); // Debug log
         wp_send_json_error('Card error: ' . $e->getError()->message);
     } catch (\Exception $e) {
+        error_log('Stripe General Error: ' . $e->getMessage()); // Debug log
         wp_send_json_error('Error: ' . $e->getMessage());
     }
 }
@@ -241,35 +247,48 @@ function uab_stripe_deposit_funds() {
     $options = get_option('uab_stripe_options', array());
     $mode = $_POST['mode'];
     $secret_key = ($mode === 'test') ? $options['uab_stripe_test_secret_key'] : $options['uab_stripe_live_secret_key'];
-    Stripe::setApiKey($secret_key); // Use saved secret key (hashed, see notes)
+    Stripe::setApiKey($secret_key); // Use plain text secret key
 
     $deposit_amount = floatval($_POST['deposit_amount']);
     $saved_card = $options['uab_stripe_saved_card'] ?? null;
 
-    if ($deposit_amount > 0 && $saved_card && isset($saved_card['token'])) {
-        try {
-            // Create a charge using the saved token
-            $charge = Charge::create(array(
-                'amount' => $deposit_amount * 100, // Amount in cents
-                'currency' => 'usd',
-                'source' => $saved_card['token'],
-                'description' => 'Test deposit to virtual wallet'
-            ));
-            if ($charge->status === 'succeeded') {
-                $current_balance = floatval($options['uab_stripe_wallet_balance'] ?? 0);
-                $options['uab_stripe_wallet_balance'] = $current_balance + $deposit_amount;
-                update_option('uab_stripe_options', $options);
-                wp_send_json_success('Funds deposited via Stripe. New balance: $' . number_format($options['uab_stripe_wallet_balance'], 2));
-            } else {
-                wp_send_json_error('Charge failed: ' . $charge->status);
-            }
-        } catch (\Stripe\Exception\CardException $e) {
-            wp_send_json_error('Card error: ' . $e->getError()->message);
-        } catch (\Exception $e) {
-            wp_send_json_error('Error: ' . $e->getMessage());
+    error_log('Deposit Attempt - Mode: ' . $mode . ', Secret Key: ' . $secret_key . ', Amount: ' . $deposit_amount . ', Saved Card: ' . print_r($saved_card, true)); // Debug
+    if (empty($secret_key)) {
+        wp_send_json_error('No secret key configured for ' . $mode . ' mode.');
+        return;
+    }
+    if ($deposit_amount <= 0) {
+        wp_send_json_error('Invalid deposit amount.');
+        return;
+    }
+    if (!$saved_card || !isset($saved_card['token'])) {
+        wp_send_json_error('No saved card available.');
+        return;
+    }
+
+    try {
+        // Create a charge using the saved token
+        $charge = Charge::create(array(
+            'amount' => $deposit_amount * 100, // Amount in cents
+            'currency' => 'usd',
+            'source' => $saved_card['token'],
+            'description' => 'Test deposit to virtual wallet'
+        ));
+        error_log('Stripe Charge Response: ' . print_r($charge, true)); // Debug log
+        if ($charge->status === 'succeeded') {
+            $current_balance = floatval($options['uab_stripe_wallet_balance'] ?? 0);
+            $options['uab_stripe_wallet_balance'] = $current_balance + $deposit_amount;
+            update_option('uab_stripe_options', $options);
+            wp_send_json_success('Funds deposited via Stripe. New balance: $' . number_format($options['uab_stripe_wallet_balance'], 2));
+        } else {
+            wp_send_json_error('Charge failed: ' . $charge->status);
         }
-    } else {
-        wp_send_json_error('Invalid deposit amount or no saved card.');
+    } catch (\Stripe\Exception\CardException $e) {
+        error_log('Stripe Card Error: ' . $e->getError()->message); // Debug log
+        wp_send_json_error('Card error: ' . $e->getError()->message);
+    } catch (\Exception $e) {
+        error_log('Stripe General Error: ' . $e->getMessage()); // Debug log
+        wp_send_json_error('Error: ' . $e->getMessage());
     }
 }
 
@@ -299,13 +318,16 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
 
 file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod/scripts/stripe-test.js', 
     "jQuery(document).ready(function($) {
+        console.log('Stripe Test JS Loaded'); // Debug
         $('#uab_stripe_save_card').on('click', function() {
+            console.log('Save Card Clicked'); // Debug
             var card_number = $('#uab_stripe_card_number').val();
             var expiry = $('#uab_stripe_card_expiry').val();
             var cvc = $('#uab_stripe_card_cvc').val();
             var name = $('#uab_stripe_card_name').val();
             var mode = $('input[name=\"uab_stripe_options[uab_stripe_mode]\"]:checked').val() || 'test';
 
+            console.log('Card Data: ' + card_number + ', ' + expiry + ', ' + cvc + ', ' + name + ', Mode: ' + mode); // Debug
             $.ajax({
                 url: uab_stripe_test.ajax_url,
                 method: 'POST',
@@ -320,6 +342,7 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
                     name: name
                 },
                 success: function(response) {
+                    console.log('AJAX Success: ' + JSON.stringify(response)); // Debug
                     if (response.success) {
                         $('#uab_stripe_card_status').text(response.data).show();
                     } else {
@@ -327,15 +350,18 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
                     }
                 },
                 error: function(xhr, status, error) {
+                    console.log('AJAX Error: ' + status + ' - ' + error + ', Response: ' + xhr.responseText); // Debug
                     $('#uab_stripe_card_status').text('Error saving card: ' + status + ' - ' + error).css('color', 'red').show();
                 }
             });
         });
 
         $('#uab_stripe_deposit_funds').on('click', function() {
+            console.log('Deposit Funds Clicked'); // Debug
             var deposit_amount = $('#uab_stripe_wallet_deposit_amount').val();
             var mode = $('input[name=\"uab_stripe_options[uab_stripe_mode]\"]:checked').val() || 'test';
 
+            console.log('Deposit Data: ' + deposit_amount + ', Mode: ' + mode); // Debug
             $.ajax({
                 url: uab_stripe_test.ajax_url,
                 method: 'POST',
@@ -347,6 +373,7 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
                     deposit_amount: deposit_amount
                 },
                 success: function(response) {
+                    console.log('AJAX Success: ' + JSON.stringify(response)); // Debug
                     if (response.success) {
                         $('#uab_stripe_deposit_status').text(response.data).show();
                         // Refresh the page to update wallet balance display
@@ -356,6 +383,7 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
                     }
                 },
                 error: function(xhr, status, error) {
+                    console.log('AJAX Error: ' + status + ' - ' + error + ', Response: ' + xhr.responseText); // Debug
                     $('#uab_stripe_deposit_status').text('Error depositing funds: ' + status + ' - ' + error).css('color', 'red').show();
                 }
             });
