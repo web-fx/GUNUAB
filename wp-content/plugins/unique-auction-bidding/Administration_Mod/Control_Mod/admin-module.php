@@ -62,6 +62,3 @@ class UAB_Admin_Module {
         return apply_filters('uab_settings', $settings);
     }
 }
-
-// Initialize the admin module
-// Note: Instantiation is handled by uab_admin.php now
