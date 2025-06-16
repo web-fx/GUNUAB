@@ -262,7 +262,7 @@ function uab_stripe_deposit_funds() {
         return;
     }
     if (!$saved_card || !isset($saved_card['token'])) {
-        wp_send_json_error('No saved card available.');
+        wp_send_json_error('No saved card available or token missing.');
         return;
     }
 
@@ -319,42 +319,52 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
 file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod/scripts/stripe-test.js', 
     "jQuery(document).ready(function($) {
         console.log('Stripe Test JS Loaded'); // Debug
-        $('#uab_stripe_save_card').on('click', function() {
-            console.log('Save Card Clicked'); // Debug
-            var card_number = $('#uab_stripe_card_number').val();
-            var expiry = $('#uab_stripe_card_expiry').val();
-            var cvc = $('#uab_stripe_card_cvc').val();
-            var name = $('#uab_stripe_card_name').val();
-            var mode = $('input[name=\"uab_stripe_options[uab_stripe_mode]\"]:checked').val() || 'test';
+        if ($('#uab_stripe_save_card').length) {
+            console.log('Save Card button found'); // Debug
+            $('#uab_stripe_save_card').on('click', function() {
+                console.log('Save Card Clicked'); // Debug
+                var card_number = $('#uab_stripe_card_number').val();
+                var expiry = $('#uab_stripe_card_expiry').val();
+                var cvc = $('#uab_stripe_card_cvc').val();
+                var name = $('#uab_stripe_card_name').val();
+                var mode = $('input[name=\"uab_stripe_options[uab_stripe_mode]\"]:checked').val() || 'test';
 
-            console.log('Card Data: ' + card_number + ', ' + expiry + ', ' + cvc + ', ' + name + ', Mode: ' + mode); // Debug
-            $.ajax({
-                url: uab_stripe_test.ajax_url,
-                method: 'POST',
-                dataType: 'json',
-                data: {
-                    action: 'uab_stripe_save_card',
-                    nonce: uab_stripe_test.nonce,
-                    mode: mode,
-                    card_number: card_number,
-                    expiry: expiry,
-                    cvc: cvc,
-                    name: name
-                },
-                success: function(response) {
-                    console.log('AJAX Success: ' + JSON.stringify(response)); // Debug
-                    if (response.success) {
-                        $('#uab_stripe_card_status').text(response.data).show();
-                    } else {
-                        $('#uab_stripe_card_status').text(response.data).css('color', 'red').show();
-                    }
-                },
-                error: function(xhr, status, error) {
-                    console.log('AJAX Error: ' + status + ' - ' + error + ', Response: ' + xhr.responseText); // Debug
-                    $('#uab_stripe_card_status').text('Error saving card: ' + status + ' - ' + error).css('color', 'red').show();
+                console.log('Card Data: ' + card_number + ', ' + expiry + ', ' + cvc + ', ' + name + ', Mode: ' + mode); // Debug
+                if (!card_number || !expiry || !cvc || !name) {
+                    $('#uab_stripe_card_status').text('All fields are required.').css('color', 'red').show();
+                    return;
                 }
+
+                $.ajax({
+                    url: uab_stripe_test.ajax_url,
+                    method: 'POST',
+                    dataType: 'json',
+                    data: {
+                        action: 'uab_stripe_save_card',
+                        nonce: uab_stripe_test.nonce,
+                        mode: mode,
+                        card_number: card_number,
+                        expiry: expiry,
+                        cvc: cvc,
+                        name: name
+                    },
+                    success: function(response) {
+                        console.log('AJAX Success: ' + JSON.stringify(response)); // Debug
+                        if (response.success) {
+                            $('#uab_stripe_card_status').text(response.data).show();
+                        } else {
+                            $('#uab_stripe_card_status').text(response.data).css('color', 'red').show();
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.log('AJAX Error: ' + status + ' - ' + error + ', Response: ' + xhr.responseText); // Debug
+                        $('#uab_stripe_card_status').text('Error saving card: ' + status + ' - ' + error + (xhr.responseText ? ' - ' + xhr.responseText : '')).css('color', 'red').show();
+                    }
+                });
             });
-        });
+        } else {
+            console.log('Save Card button not found in DOM'); // Debug
+        }
 
         $('#uab_stripe_deposit_funds').on('click', function() {
             console.log('Deposit Funds Clicked'); // Debug
@@ -362,6 +372,11 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
             var mode = $('input[name=\"uab_stripe_options[uab_stripe_mode]\"]:checked').val() || 'test';
 
             console.log('Deposit Data: ' + deposit_amount + ', Mode: ' + mode); // Debug
+            if (!deposit_amount || deposit_amount <= 0) {
+                $('#uab_stripe_deposit_status').text('Valid deposit amount required.').css('color', 'red').show();
+                return;
+            }
+
             $.ajax({
                 url: uab_stripe_test.ajax_url,
                 method: 'POST',
@@ -384,7 +399,7 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
                 },
                 error: function(xhr, status, error) {
                     console.log('AJAX Error: ' + status + ' - ' + error + ', Response: ' + xhr.responseText); // Debug
-                    $('#uab_stripe_deposit_status').text('Error depositing funds: ' + status + ' - ' + error).css('color', 'red').show();
+                    $('#uab_stripe_deposit_status').text('Error depositing funds: ' + status + ' - ' + error + (xhr.responseText ? ' - ' + xhr.responseText : '')).css('color', 'red').show();
                 }
             });
         });
