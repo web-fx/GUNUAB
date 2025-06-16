@@ -64,10 +64,4 @@ class UAB_Admin_Module {
 }
 
 // Initialize the admin module
-new UAB_Admin_Module();
-
-// Load text domain for translations (optional, add if you plan to localize)
-function uab_load_textdomain() {
-    load_plugin_textdomain('unique-auction-bidding', false, dirname(plugin_basename(__FILE__)) . '/languages');
-}
-add_action('plugins_loaded', 'uab_load_textdomain');
+// Note: Instantiation is handled by uab_admin.php now
