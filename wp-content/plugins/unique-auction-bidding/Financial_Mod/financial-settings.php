@@ -9,8 +9,8 @@ use Stripe\Charge;
 
 function uab_register_settings() {
     // Register settings for both test and live modes
-    register_setting('uab_financial_settings', 'uab_stripe_test_options', array('sanitize_callback' => 'uab_sanitize_stripe_options'));
-    register_setting('uab_financial_settings', 'uab_stripe_live_options', array('sanitize_callback' => 'uab_sanitize_stripe_options'));
+    register_setting('uab_financial_settings_test', 'uab_stripe_test_options', array('sanitize_callback' => 'uab_sanitize_stripe_options'));
+    register_setting('uab_financial_settings_live', 'uab_stripe_live_options', array('sanitize_callback' => 'uab_sanitize_stripe_options'));
     add_settings_section('uab_stripe_section', 'Stripe Payment Gateway', 'uab_stripe_section_callback', 'uab-financial');
     add_settings_field('uab_stripe_mode', 'Mode', 'uab_stripe_field_callback', 'uab-financial', 'uab_stripe_section', array('id' => 'uab_stripe_mode'));
     add_settings_field('uab_stripe_test_panel', 'Test Mode Settings', 'uab_stripe_field_callback', 'uab-financial', 'uab_stripe_section', array('id' => 'uab_stripe_test_panel'));
@@ -27,13 +27,19 @@ function uab_sanitize_stripe_options($input) {
     $option_name = ($mode === 'test') ? 'uab_stripe_test_options' : 'uab_stripe_live_options';
     $existing_options = get_option($option_name, array());
 
+    // Filter input based on mode to prevent cross-contamination
+    $mode_fields = ($mode === 'test') 
+        ? ['uab_stripe_test_publishable_key', 'uab_stripe_test_secret_key', 'uab_stripe_test_webhook_signing_secret']
+        : ['uab_stripe_live_publishable_key', 'uab_stripe_live_secret_key', 'uab_stripe_live_webhook_signing_secret'];
     foreach ($input as $key => $value) {
-        if (in_array($key, ['uab_stripe_test_secret_key', 'uab_stripe_live_secret_key', 'uab_stripe_test_webhook_signing_secret', 'uab_stripe_live_webhook_signing_secret'])) {
-            $output[$key] = !empty($value) ? sanitize_text_field($value) : $existing_options[$key] ?? '';
-        } elseif ($key === 'uab_stripe_wallet_deposit') {
-            $output[$key] = is_numeric($value) && $value > 0 ? floatval($value) : $existing_options[$key] ?? 0;
-        } else {
-            $output[$key] = sanitize_text_field($value);
+        if (in_array($key, $mode_fields) || in_array($key, ['uab_stripe_webhook_url', 'uab_stripe_enabled_events', 'uab_stripe_card_number', 'uab_stripe_card_expiry', 'uab_stripe_card_cvc', 'uab_stripe_card_name', 'uab_stripe_wallet_deposit'])) {
+            if (in_array($key, ['uab_stripe_test_secret_key', 'uab_stripe_live_secret_key', 'uab_stripe_test_webhook_signing_secret', 'uab_stripe_live_webhook_signing_secret'])) {
+                $output[$key] = !empty($value) ? sanitize_text_field($value) : $existing_options[$key] ?? '';
+            } elseif ($key === 'uab_stripe_wallet_deposit') {
+                $output[$key] = is_numeric($value) && $value > 0 ? floatval($value) : $existing_options[$key] ?? 0;
+            } else {
+                $output[$key] = sanitize_text_field($value);
+            }
         }
     }
     // Handle multi-select array
@@ -55,11 +61,12 @@ function uab_stripe_section_callback() {
 function uab_stripe_field_callback($args) {
     $test_options = get_option('uab_stripe_test_options', array());
     $live_options = get_option('uab_stripe_live_options', array());
-    $mode = isset($test_options['uab_stripe_mode']) ? $test_options['uab_stripe_mode'] : (isset($live_options['uab_stripe_mode']) ? $live_options['uab_stripe_mode'] : 'test');
-    $saved_card = ($mode === 'test') ? $test_options['uab_stripe_saved_card'] : $live_options['uab_stripe_saved_card'];
-    $wallet_balance = ($mode === 'test') ? $test_options['uab_stripe_wallet_balance'] : $live_options['uab_stripe_wallet_balance'];
+    $mode = isset($_POST['uab_stripe_mode']) ? sanitize_text_field($_POST['uab_stripe_mode']) : (isset($test_options['uab_stripe_mode']) ? $test_options['uab_stripe_mode'] : (isset($live_options['uab_stripe_mode']) ? $live_options['uab_stripe_mode'] : 'test'));
+    $options = ($mode === 'test') ? $test_options : $live_options;
+    $saved_card = isset($options['uab_stripe_saved_card']) ? $options['uab_stripe_saved_card'] : null;
+    $wallet_balance = isset($options['uab_stripe_wallet_balance']) ? $options['uab_stripe_wallet_balance'] : 0;
     $id = $args['id'];
-    $value = ($mode === 'test') ? $test_options[$id] : $live_options[$id];
+    $value = isset($options[$id]) ? $options[$id] : '';
     switch ($id) {
         case 'uab_stripe_mode':
             echo '<input type="radio" name="uab_stripe_mode" value="test" ' . checked('test', $mode, false) . ' id="uab_stripe_mode_test"> <label for="uab_stripe_mode_test">Test Mode</label>';
@@ -166,19 +173,24 @@ function uab_financial_page() {
     // Set Stripe API key based on mode
     $test_options = get_option('uab_stripe_test_options', array());
     $live_options = get_option('uab_stripe_live_options', array());
-    $mode = isset($test_options['uab_stripe_mode']) ? $test_options['uab_stripe_mode'] : (isset($live_options['uab_stripe_mode']) ? $live_options['uab_stripe_mode'] : 'test');
+    $mode = isset($_POST['uab_stripe_mode']) ? sanitize_text_field($_POST['uab_stripe_mode']) : (isset($test_options['uab_stripe_mode']) ? $test_options['uab_stripe_mode'] : (isset($live_options['uab_stripe_mode']) ? $live_options['uab_stripe_mode'] : 'test'));
     $secret_key = ($mode === 'test') ? $test_options['uab_stripe_test_secret_key'] : $live_options['uab_stripe_live_secret_key'];
     if (!empty($secret_key)) {
         Stripe::setApiKey($secret_key); // Use plain text secret key
     }
     echo '<div class="wrap"><h1>Financial</h1>';
-    echo '<form method="post" action="options.php">';
-    settings_fields('uab_financial_settings');
+    echo '<form method="post" action="options.php" id="uab_stripe_form">';
+    echo '<input type="hidden" name="uab_stripe_mode" id="uab_stripe_mode_hidden" value="' . esc_attr($mode) . '">';
+    settings_fields('uab_financial_settings_' . $mode); // Dynamic settings group
     do_settings_sections('uab-financial');
     submit_button();
-    echo '</form></div>';
+    echo '</form>';
 
     // Enqueue JavaScript for card saving and deposit
+    wp_enqueue_script('uab-stripe-settings', plugin_dir_url(__FILE__) . '../Administration_Mod/Control_Mod/scripts/stripe-settings.js', array('jquery'), '1.0', true);
+    wp_localize_script('uab-stripe-settings', 'uab_stripe', array(
+        'nonce' => wp_create_nonce('uab_stripe_settings')
+    ));
     wp_enqueue_script('uab-stripe-test', plugin_dir_url(__FILE__) . '../Administration_Mod/Control_Mod/scripts/stripe-test.js', array('jquery'), '1.0', true);
     wp_localize_script('uab-stripe-test', 'uab_stripe_test', array(
         'ajax_url' => admin_url('admin-ajax.php'),
@@ -310,13 +322,19 @@ function uab_stripe_deposit_funds() {
 file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod/scripts/stripe-settings.js', 
     "jQuery(document).ready(function($) {
         function toggleStripeFields() {
-            var mode = $('input[name=\"uab_stripe_mode\"]:checked').val() || 'test'; // Updated to match form name
+            var mode = $('input[name=\"uab_stripe_mode\"]:checked').val() || 'test';
             if (mode === 'test') {
                 $('#uab_stripe_test_panel').show();
                 $('#uab_stripe_live_panel').hide();
+                $('#uab_stripe_form').attr('action', 'options.php');
+                $('#uab_stripe_form').attr('name', 'uab_financial_settings_test');
+                $('#uab_stripe_mode_hidden').val('test');
             } else {
                 $('#uab_stripe_test_panel').hide();
                 $('#uab_stripe_live_panel').show();
+                $('#uab_stripe_form').attr('action', 'options.php');
+                $('#uab_stripe_form').attr('name', 'uab_financial_settings_live');
+                $('#uab_stripe_mode_hidden').val('live');
             }
         }
 
@@ -326,6 +344,7 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
         // Toggle on mode change
         $('input[name=\"uab_stripe_mode\"]').on('change', function() {
             toggleStripeFields();
+            $('#uab_stripe_form').submit(); // Submit form to save the mode change
         });
     });"
 );
@@ -346,7 +365,7 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
                 var expiry = $('#uab_stripe_card_expiry').val();
                 var cvc = $('#uab_stripe_card_cvc').val();
                 var name = $('#uab_stripe_card_name').val();
-                var mode = $('input[name=\"uab_stripe_mode\"]:checked').val() || 'test'; // Updated to match form name
+                var mode = $('input[name=\"uab_stripe_mode\"]:checked').val() || 'test';
 
                 console.log('Card Data: ' + card_number + ', ' + expiry + ', ' + cvc + ', ' + name + ', Mode: ' + mode); // Debug
                 if (!card_number || !expiry || !cvc || !name) {
@@ -392,7 +411,7 @@ file_put_contents(plugin_dir_path(__FILE__) . '../Administration_Mod/Control_Mod
         $('#uab_stripe_deposit_funds').on('click', function() {
             console.log('Deposit Funds Clicked'); // Debug
             var deposit_amount = $('#uab_stripe_wallet_deposit_amount').val();
-            var mode = $('input[name=\"uab_stripe_mode\"]:checked').val() || 'test'; // Updated to match form name
+            var mode = $('input[name=\"uab_stripe_mode\"]:checked').val() || 'test';
 
             console.log('Deposit Data: ' + deposit_amount + ', Mode: ' + mode); // Debug
             if (!deposit_amount || deposit_amount <= 0) {
